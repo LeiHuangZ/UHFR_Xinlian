@@ -3,9 +3,15 @@ package com.handheld.uhfrdemo;
 import com.handheld.uhfr.R;
 import com.uhf.api.cls.Reader;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
+import android.util.Log;
+import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -47,6 +53,41 @@ public class Fragment2_ReadAndWrite extends Fragment implements View.OnClickList
 
 	Pattern pattern = Pattern.compile("[0-9A-Fa-f]*");
 
+	private boolean f2Hidden = false;
+
+	/**
+	 *  点亮led标签
+	 */
+	private void lightLedTag() {
+		String accessPwdStr = editAccess.getText().toString().trim();
+		if (accessPwdStr.length() != 8) {
+			accessPwdStr = "00000000";
+		}
+		if ("".equals(selectEpc)) {
+			selectEpc = "000000000000000000000000";
+		}
+		byte[] epcBytes = Tools.HexString2Bytes(selectEpc);
+		byte[] accessBytes = Tools.HexString2Bytes(accessPwdStr);
+		MainActivity.mUhfrManager.getTagDataByFilter(0, 4, 1, accessBytes, (short) 1000, epcBytes, 1, 2, true);
+	}
+
+	private final BroadcastReceiver keyBroadcastReceiver = new BroadcastReceiver() {
+		@Override
+		public void onReceive(Context context, Intent intent) {
+			if (!f2Hidden && intent != null) {
+				String action = intent.getAction();
+				if ("android.rfid.FUN_KEY".equals(action)) {
+					int keyCode = intent.getIntExtra("keyCode", -1);
+					boolean keyDown = intent.getBooleanExtra("keydown", true);
+					if (keyCode == KeyEvent.KEYCODE_F4 && !keyDown) {
+						Log.i("f2", "lightLedTag");
+						lightLedTag();
+					}
+				}
+			}
+		}
+	};
+
 	@Override
 	public View onCreateView(LayoutInflater inflater,
 			@Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
@@ -59,12 +100,36 @@ public class Fragment2_ReadAndWrite extends Fragment implements View.OnClickList
 	@Override
 	public void onHiddenChanged(boolean hidden) {
 		super.onHiddenChanged(hidden);
+		f2Hidden = hidden;
+		Log.i("f2", "onHiddenChanged, hidden: " + hidden);
 		if (hidden){
 
 		}else {
 			epcSet = MainActivity.mSetEpcs ;
 			initSpinner() ;
 		}
+	}
+
+	@Override
+	public void onPause() {
+		super.onPause();
+		MainActivity mainActivity = (MainActivity) getActivity();
+		if (mainActivity != null) {
+			mainActivity.unregisterReceiver(keyBroadcastReceiver);
+		}
+		Log.i("f2", "onPause");
+	}
+
+	@Override
+	public void onResume() {
+		super.onResume();
+		MainActivity mainActivity = (MainActivity) getActivity();
+		if (mainActivity != null) {
+			IntentFilter intentFilter = new IntentFilter();
+			intentFilter.addAction("android.rfid.FUN_KEY");
+			mainActivity.registerReceiver(keyBroadcastReceiver, intentFilter);
+		}
+		Log.i("f2", "onResume");
 	}
 
 	private void initView() {
