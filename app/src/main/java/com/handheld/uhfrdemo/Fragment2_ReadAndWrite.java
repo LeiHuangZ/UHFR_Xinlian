@@ -23,9 +23,15 @@ import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.Toast;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import cn.pda.serialport.Tools;
@@ -55,20 +61,36 @@ public class Fragment2_ReadAndWrite extends Fragment implements View.OnClickList
 
 	private boolean f2Hidden = false;
 
+	private boolean lightFlag;
+	private ExecutorService mExecutorService = new ThreadPoolExecutor(3, 200, 0L,
+			TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(1024), Executors.defaultThreadFactory(), new ThreadPoolExecutor.AbortPolicy());
+
 	/**
 	 *  点亮led标签
 	 */
 	private void lightLedTag() {
-		String accessPwdStr = editAccess.getText().toString().trim();
-		if (accessPwdStr.length() != 8) {
-			accessPwdStr = "00000000";
+		if (!lightFlag) {
+			lightFlag = true;
+			mExecutorService.execute(new Runnable() {
+				@Override
+				public void run() {
+					while (lightFlag) {
+						String accessPwdStr = editAccess.getText().toString().trim();
+						if (accessPwdStr.length() != 8) {
+							accessPwdStr = "00000000";
+						}
+						if ("".equals(selectEpc)) {
+							selectEpc = "000000000000000000000000";
+						}
+						byte[] epcBytes = Tools.HexString2Bytes(selectEpc);
+						byte[] accessBytes = Tools.HexString2Bytes(accessPwdStr);
+						MainActivity.mUhfrManager.getTagDataByFilter(0, 4, 1, accessBytes, (short) 1000, epcBytes, 1, 2, true);
+					}
+				}
+			});
+		} else {
+			lightFlag = false;
 		}
-		if ("".equals(selectEpc)) {
-			selectEpc = "000000000000000000000000";
-		}
-		byte[] epcBytes = Tools.HexString2Bytes(selectEpc);
-		byte[] accessBytes = Tools.HexString2Bytes(accessPwdStr);
-		MainActivity.mUhfrManager.getTagDataByFilter(0, 4, 1, accessBytes, (short) 1000, epcBytes, 1, 2, true);
 	}
 
 	private final BroadcastReceiver keyBroadcastReceiver = new BroadcastReceiver() {
